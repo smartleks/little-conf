@@ -1,0 +1,14 @@
+*.json
+*__pycache__*
+*.vscode*
+toolkits/*
+*.csv
+*.txt
+*.bin
+*.parquet
+*/.ipynb_checkpoints/*
+.ipynb_checkpoints/*
+.coverage
+test.ipynb
+dist
+TODO

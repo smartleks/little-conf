@@ -1,0 +1,3 @@
+merge_request:
+  method: fast-forward
+  squash: allow

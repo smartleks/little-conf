@@ -1,0 +1,3 @@
+# Configuration for local env
+
+LOG_LEVEL: DEBUG

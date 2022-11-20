@@ -1,0 +1,109 @@
+stages:
+  - linters
+  - release
+  - global
+
+variables:
+  PYTHON_IMAGE: builder.local:18080/common/base_images/python39:23e82f3e
+  POETRY_REPOSITORIES_PYPI: http://builder.local:8081/repository/pypi_all/simple/
+
+.poetry_install:
+  image: $PYTHON_IMAGE
+  before_script:
+    - pip install poetry==1.2.2
+    - poetry config virtualenvs.create false
+    # - poetry config repositories.mirror http://192.168.1.106:8081/repository/pypi_all/simple/ --local
+    - poetry config repositories.pypi http://builder.local:8081/repository/pypi_all/simple/
+    - poetry install
+
+Check author name and email:
+  image: $PYTHON_IMAGE
+  stage: linters
+  script:
+    - export BAD_AUTHOR_LINES=$(git log --pretty=format:"%h %ce %ae %cn %an" | grep -v 'aks@smartleks aks@smartleks aks aks' | wc -l)
+    - echo ${BAD_AUTHOR_LINES}
+    - if [ ${BAD_AUTHOR_LINES} -ne 0 ]; then exit 1; fi
+
+Run tests:
+  extends: .poetry_install
+  stage: linters
+  script:
+    - python -m pytest tests/
+  except:
+    - tags
+    - master
+
+Build package:
+  extends: .poetry_install
+  stage: linters
+  script:
+    - poetry build
+  except:
+    - tags
+    - master
+
+Release:
+  extends: .poetry_install
+  stage: release
+  script:
+    - poetry version $(echo ${CI_COMMIT_TAG} | cut -d '-' -f2)
+    - poetry build
+    - poetry config repositories.pypi_local "$pypi_url_local"
+    - poetry publish -r pypi_local -u "$pypi_local_user" -p "$pypi_local_pwd"
+    - poetry publish -u "$pypi_global_user" -p "$pypi_global_pwd" --dry-run
+  only:
+    - /^release-[0-9]+\.[0-9]+\.[0-9]+$/
+
+gh_push:
+  image: $PYTHON_IMAGE
+  stage: linters
+  before_script:
+    - mkdir ~/.ssh/
+    # - echo "${CI_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+    - ssh-keyscan github.com >> ~/.ssh/known_hosts
+    - echo "${SSH_PUSH_KEY}" > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - git config user.email "ci@example.com"
+    - git config user.name "CI"
+    # - git branch -M master
+    - git remote remove ssh_origin || true  # Local repo state may be cached
+    - git remote add ssh_origin "git@github.com:smartleks/little-conf.git"
+  script:
+    - git branch -D master1 || true
+    - git checkout -b master1
+    - git tag
+    - git push ssh_origin refs/tags/$CI_COMMIT_TAG
+    - git push -u ssh_origin master1:master || true
+    - git push -f ssh_origin master1:master
+  only:
+    - tags
+
+
+GLOBAL (public release):
+  extends: .poetry_install
+  stage: global
+  before_script:
+    - mkdir ~/.ssh/
+    # - echo "${CI_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+    - ssh-keyscan github.com >> ~/.ssh/known_hosts
+    - echo "${SSH_PUSH_KEY}" > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - git config user.email "ci@example.com"
+    - git config user.name "CI"
+    # - git branch -M master
+    - git remote remove ssh_origin || true  # Local repo state may be cached
+    - git remote add ssh_origin "git@github.com:smartleks/little-conf.git"
+  script:
+    - poetry version $(echo ${CI_COMMIT_TAG} | cut -d '-' -f2)
+    - poetry build
+    - poetry publish -u "$pypi_global_user" -p "$pypi_global_pwd"
+    - echo "Push to github"
+    - git branch -D master1 || true
+    - git checkout -b master1
+    - git tag
+    - git push ssh_origin refs/tags/$CI_COMMIT_TAG
+    - git push -u ssh_origin master1:master || true
+    - git push -f ssh_origin master1:master
+  only:
+    - /^release-[0-9]+\.[0-9]+\.[0-9]+$/
+  when: manual
