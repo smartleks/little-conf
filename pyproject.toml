@@ -3,6 +3,7 @@ name = "little-conf"
 version = "0.0.0"  # update automatically by CI
 description = "Simple library for service configuration"
 authors = ["smartleks"]
+repository = "https://github.com/smartleks/little-conf"
 
 [tool.poetry.dependencies]
 python = "^3.7"
