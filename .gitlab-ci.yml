@@ -1,3 +1,9 @@
+include:
+  - project: 'common/gitlab-ci-common'
+    file: '/templates/.github-release.yml'
+  - project: 'common/gitlab-ci-common'
+    file: '/templates/.pypi-release.yml'
+
 stages:
   - linters
   - release
@@ -55,30 +61,22 @@ Release:
   only:
     - /^release-[0-9]+\.[0-9]+\.[0-9]+$/
 
-GLOBAL (public release):
-  extends: .poetry_install
+GLOBAL GITHUB (public release):
   stage: global
-  script:
-    - mkdir ~/.ssh/
-    # - echo "${CI_KNOWN_HOSTS}" > ~/.ssh/known_hosts
-    - ssh-keyscan github.com >> ~/.ssh/known_hosts
-    - echo "${SSH_PUSH_KEY}" > ~/.ssh/id_rsa
-    - chmod 600 ~/.ssh/id_rsa
-    - git config user.email "ci@example.com"
-    - git config user.name "CI"
-    # - git branch -M master
-    - git remote remove ssh_origin || true  # Local repo state may be cached
-    - git remote add ssh_origin "git@github.com:smartleks/little-conf.git"
-    - git branch -D master1 || true
-    - git checkout -b master1
-    - git tag
-    - git push ssh_origin refs/tags/$CI_COMMIT_TAG
-    - git push -u ssh_origin master1:master || true
-    - git push -f ssh_origin master1:master
-    - echo "Push to pypi"
-    - poetry version $(echo ${CI_COMMIT_TAG} | cut -d '-' -f2)
-    - poetry build
-    - poetry publish -u "$pypi_global_user" -p "$pypi_global_pwd"
+  image: $PYTHON_IMAGE
+  variables:
+    GITHUB_PROJECT_URL: git@github.com:smartleks/little-conf.git
+  extends:
+    - .github_release_master
+  only:
+    - /^release-[0-9]+\.[0-9]+\.[0-9]+$/
+  when: manual
+
+GLOBAL PYPI (public release):
+  stage: global
+  extends:
+    - .poetry_install
+    - .pypi_release_poetry
   only:
     - /^release-[0-9]+\.[0-9]+\.[0-9]+$/
   when: manual
